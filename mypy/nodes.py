@@ -216,7 +216,10 @@ class SymbolNode(Node):
 
     @classmethod
     def deserialize(cls, data: JsonDict) -> 'SymbolNode':
-        classname = data['.class']
+        if isinstance(data, list):
+            classname = data[0]
+        else:
+            classname = data['.class']
         method = deserialize_map.get(classname)
         if method is not None:
             return method(data)
@@ -547,31 +550,26 @@ class FuncDef(FuncItem, SymbolNode, Statement):
         # TODO: After a FuncDef is deserialized, the only time we use `arg_names`
         # and `arg_kinds` is when `type` is None and we need to infer a type. Can
         # we store the inferred type ahead of time?
-        return {'.class': 'FuncDef',
-                'name': self._name,
-                'fullname': self._fullname,
-                'arg_names': self.arg_names,
-                'arg_kinds': self.arg_kinds,
-                'type': None if self.type is None else self.type.serialize(),
-                'flags': get_flags(self, FuncDef.FLAGS),
-                # TODO: Do we need expanded, original_def?
-                }
+        # TODO: Do we need expanded, original_def?
+
+        return ('FuncDef', self._name, self._fullname, self.arg_names, self.arg_kinds, None if self.type is None else self.type.serialize(), get_flags(self, FuncDef.FLAGS))
 
     @classmethod
     def deserialize(cls, data: JsonDict) -> 'FuncDef':
-        assert data['.class'] == 'FuncDef'
+        cl, name, fullname, arg_names, arg_kinds, type, flags = data
+        assert cl == 'FuncDef'
         body = Block([])
-        ret = FuncDef(data['name'],
+        ret = FuncDef(name,
                       [],
                       body,
-                      (None if data['type'] is None
+                      (None if type is None
                        else cast(mypy.types.FunctionLike,
-                                 mypy.types.deserialize_type(data['type']))))
-        ret._fullname = data['fullname']
-        set_flags(ret, data['flags'])
+                                 mypy.types.deserialize_type(type))))
+        ret._fullname = fullname
+        set_flags(ret, flags)
         # NOTE: ret.info is set in the fixup phase.
-        ret.arg_names = data['arg_names']
-        ret.arg_kinds = data['arg_kinds']
+        ret.arg_names = arg_names
+        ret.arg_kinds = arg_kinds
         # Mark these as 'None' so that future uses will trigger an error
         ret.arguments = None
         ret.max_pos = None
@@ -729,22 +727,18 @@ class ClassDef(Statement):
 
     def serialize(self) -> JsonDict:
         # Not serialized: defs, base_type_exprs, decorators
-        return {'.class': 'ClassDef',
-                'name': self.name,
-                'fullname': self.fullname,
-                'type_vars': [v.serialize() for v in self.type_vars],
-                'metaclass': self.metaclass,
-                }
+        return ('ClassDef', self.name, self.fullname, [v.serialize() for v in self.type_vars], self.metaclass)
 
     @classmethod
     def deserialize(self, data: JsonDict) -> 'ClassDef':
-        assert data['.class'] == 'ClassDef'
-        res = ClassDef(data['name'],
+        cl, name, fullname, type_vars, metaclass = data
+        assert cl == 'ClassDef'
+        res = ClassDef(name,
                        Block([]),
-                       [mypy.types.TypeVarDef.deserialize(v) for v in data['type_vars']],
-                       metaclass=data['metaclass'],
+                       [mypy.types.TypeVarDef.deserialize(v) for v in type_vars],
+                       metaclass=metaclass,
                        )
-        res.fullname = data['fullname']
+        res.fullname = fullname
         return res
 
 
