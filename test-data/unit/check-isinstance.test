@@ -1412,3 +1412,11 @@ def f(x: Union[int, A], a: Type[A]) -> None:
 
 [builtins fixtures/isinstancelist.pyi]
 
+
+[case testVariableContainingTuple]
+T = (int, int)
+x : object
+if isinstance(x, T):
+    reveal_type(x)  # Revealed type is 'builtins.int'
+    x + x
+[builtins fixtures/isinstancelist.pyi]

@@ -2766,16 +2766,18 @@ def find_isinstance_check(node: Expression,
     return {}, {}
 
 
-def flatten(t: Expression) -> List[Expression]:
+def flatten(t: Expression, type_map: Dict[Expression, Type] = {}) -> List[Expression]:
     """Flatten a nested sequence of tuples/lists into one list of nodes."""
-    if isinstance(t, TupleExpr) or isinstance(t, ListExpr):
+    if isinstance(t, NameExpr) and t in type_map:
+        t = type_map[t]
+    if isinstance(t, TupleExpr) or isinstance(t, ListExpr) or isinstance(t, TupleType):
         return [b for a in t.items for b in flatten(a)]
     else:
         return [t]
 
 
 def get_isinstance_type(expr: Expression, type_map: Dict[Expression, Type]) -> List[TypeRange]:
-    all_types = [type_map[e] for e in flatten(expr)]
+    all_types = flatten(expr, type_map)
     types = []  # type: List[TypeRange]
     for type in all_types:
         if isinstance(type, FunctionLike) and type.is_type_obj():
