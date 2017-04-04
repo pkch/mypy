@@ -872,6 +872,12 @@ class MessageBuilder:
         self.fail('\'{}\' is not a valid item name; expected one of {}'.format(
             item_name, format_item_name_list(typ.items.keys())), context)
 
+    def implicit_any(self,
+                     reason: str,
+                     context: Context = None
+                     ) -> None:
+        self.fail('Created type Any implicitly ({})'.format(reason), context)
+
 
 def capitalize(s: str) -> str:
     """Capitalize the first character of a string."""

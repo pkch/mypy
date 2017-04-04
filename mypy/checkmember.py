@@ -240,6 +240,7 @@ def analyze_member_var_access(name: str, itype: Instance, info: TypeInfo,
                         return getattr_type.ret_type
 
     if itype.type.fallback_to_any:
+        chk.msg.implicit_any('fallback to any in instance type')
         return AnyType()
 
     # Could not find the member.
@@ -300,6 +301,7 @@ def analyze_var(name: str, var: Var, itype: Instance, info: TypeInfo, node: Cont
         if not var.is_ready:
             not_ready_callback(var.name(), node)
         # Implicit 'Any' type.
+        msg.implicit_any('variable type unknown')
         return AnyType()
 
 
@@ -379,6 +381,7 @@ def analyze_class_attribute_access(itype: Instance,
     node = itype.type.get(name)
     if not node:
         if itype.type.fallback_to_any:
+            msg.implicit_any('fallback to any in instance type / class attribute / unknown node')
             return AnyType()
         return None
 
@@ -403,6 +406,7 @@ def analyze_class_attribute_access(itype: Instance,
         return add_class_tvars(t, itype, is_classmethod, builtin_type, original_type)
     elif isinstance(node.node, Var):
         not_ready_callback(name, context)
+        msg.implicit_any('fallback to any in instance type / class attribute')
         return AnyType()
 
     if isinstance(node.node, TypeVarExpr):
@@ -417,6 +421,7 @@ def analyze_class_attribute_access(itype: Instance,
 
     if is_decorated:
         # TODO: Return type of decorated function. This is quick hack to work around #998.
+        msg.implicit_any('decorated function return type')
         return AnyType()
     else:
         return function_type(cast(FuncBase, node.node), builtin_type('builtins.function'))

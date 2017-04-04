@@ -311,8 +311,10 @@ class StringFormatterChecker:
             if self.chk.options.python_version < (3, 0):
                 self.msg.fail("Format character 'a' is only supported in Python 3", context)
                 return None
+            self.msg.implicit_any('format character "a"')
             return AnyType()
         elif p in ['s', 'r']:
+            self.msg.implicit_any('format character "s" or "r"')
             return AnyType()
         elif p in ['d', 'i', 'o', 'u', 'x', 'X',
                    'e', 'E', 'f', 'F', 'g', 'G']:

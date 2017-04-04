@@ -899,6 +899,8 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     #
                     # TODO: Consider returning a union type instead if the
                     #       overlapping is NOT due to Any types?
+                    self.msg.implicit_any('Overlapping function overload or type Any argument',
+                                          context=context)
                     return AnyType()
                 else:
                     match.append(typ)
@@ -1561,6 +1563,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     return AnyType()
             return Overloaded([self.apply_generic_arguments(item, tapp.types, tapp)
                                for item in tp.items()])
+        self.msg.implicit_any('type application other than Callable or Overload')
         return AnyType()
 
     def visit_type_alias_expr(self, alias: TypeAliasExpr) -> Type:
@@ -1594,6 +1597,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     return AnyType()
             return Overloaded([self.apply_generic_arguments(it, item.args, item)
                                for it in tp.items()])
+        self.msg.implicit_any('Type alias other than Callable or Overloaded')
         return AnyType()
 
     def replace_tvars_any(self, tp: Type) -> Type:
@@ -1855,6 +1859,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     if e.info.fallback_to_any and base == e.info.mro[-1]:
                         # There's an undefined base class, and we're
                         # at the end of the chain.  That's not an error.
+                        self.msg.implicit_any('Undefined base class')
                         return AnyType()
                     if not self.chk.in_checked_function():
                         return AnyType()
@@ -2209,13 +2214,16 @@ class ExpressionChecker(ExpressionVisitor[Type]):
 
     def visit_type_var_expr(self, e: TypeVarExpr) -> Type:
         # TODO: Perhaps return a special type used for type variables only?
+        self.msg.implicit_any('TypeVar expression')
         return AnyType()
 
     def visit_newtype_expr(self, e: NewTypeExpr) -> Type:
+        self.msg.implicit_any('NewType expression')
         return AnyType()
 
     def visit_namedtuple_expr(self, e: NamedTupleExpr) -> Type:
         # TODO: Perhaps return a type object type?
+        self.msg.implicit_any('NamedTuple expression')
         return AnyType()
 
     def visit_enum_call_expr(self, e: EnumCallExpr) -> Type:
@@ -2232,10 +2240,12 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                         var.type = typ
                         var.is_inferred = True
         # TODO: Perhaps return a type object type?
+        self.msg.implicit_any('Enum call expression')
         return AnyType()
 
     def visit_typeddict_expr(self, e: TypedDictExpr) -> Type:
         # TODO: Perhaps return a type object type?
+        self.msg.implicit_any('TypedDict expression')
         return AnyType()
 
     def visit__promote_expr(self, e: PromoteExpr) -> Type:
