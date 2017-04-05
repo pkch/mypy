@@ -109,7 +109,10 @@ class ExpandTypeVisitor(TypeVisitor[Type]):
         return Overloaded(items)
 
     def visit_tuple_type(self, t: TupleType) -> Type:
-        return t.copy_modified(items=self.expand_types(t.items))
+        fallback = t.fallback.copy_modified(
+            args=self.expand_types(t.fallback.args))
+        return t.copy_modified(items=self.expand_types(t.items),
+                               fallback=fallback)
 
     def visit_typeddict_type(self, t: TypedDictType) -> Type:
         return t.copy_modified(item_types=self.expand_types(t.items.values()))

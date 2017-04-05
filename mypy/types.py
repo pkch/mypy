@@ -378,6 +378,9 @@ class Instance(Type):
     def __init__(self, typ: Optional[mypy.nodes.TypeInfo], args: List[Type],
                  line: int = -1, column: int = -1, erased: bool = False) -> None:
         assert(typ is None or typ.fullname() not in ["builtins.Any", "typing.Any"])
+        #if not (typ.fullname() != 'builtins.tuple' or len(args)==1):
+            #print(1)
+        #assert(typ.fullname() != 'builtins.tuple' or len(args)==1)
         self.type = typ
         self.args = args
         self.erased = erased
@@ -833,6 +836,7 @@ class TupleType(Type):
                  column: int = -1, implicit: bool = False) -> None:
         self.items = items
         self.fallback = fallback
+        assert not isinstance(fallback, Instance) or not fallback.type.fullname() == 'builtins.tuple' or fallback.args
         self.implicit = implicit
         self.can_be_true = len(self.items) > 0
         self.can_be_false = len(self.items) == 0

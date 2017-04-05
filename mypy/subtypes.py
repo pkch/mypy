@@ -148,10 +148,8 @@ class SubtypeVisitor(TypeVisitor[bool]):
             # Check that one of the types does not have type args or
             # the number of type args is the same and
             # each left type arg is acceptable in place of the matching right one
-            if not t.args or not right.args:
-                return True
             if len(t.args) != len(right.args):
-                return False
+                print(1)
             return all(self.check_type_parameter(lefta, righta, tvar.variance)
                        for lefta, righta, tvar in
                        zip(t.args, right.args, right.type.defn.type_vars))
