@@ -1702,7 +1702,10 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     j += 1
                 items.append(tt)
         fallback_item = join.join_type_list(items)
-        return TupleType(items, self.chk.named_generic_type('builtins.tuple', [fallback_item]))
+        return TupleType(
+            items,
+            self.chk.named_generic_type('builtins.tuple', [fallback_item]*len(items))
+        )
 
     def visit_dict_expr(self, e: DictExpr) -> Type:
         """Type check a dict expression.
@@ -1740,7 +1743,8 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             #
             #   def <unnamed>(*v: Tuple[kt, vt]) -> Dict[kt, vt]: ...
             constructor = CallableType(
-                [TupleType([kt, vt], self.named_type('builtins.tuple'))],
+                [TupleType([kt, vt],
+                           self.named_generic_type('builtins.tuple', [AnyType()]))],
                 [nodes.ARG_STAR],
                 [None],
                 self.chk.named_generic_type('builtins.dict', [kt, vt]),
@@ -2058,6 +2062,12 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         arguments. Alias for TypeChecker.named_type.
         """
         return self.chk.named_type(name)
+
+    def named_generic_type(self, name: str, args: List[Type]) -> Instance:
+        """Return an instance type with type given by the name and no type
+        arguments. Alias for TypeChecker.named_type.
+        """
+        return self.chk.named_generic_type(name, args)
 
     def is_valid_var_arg(self, typ: Type) -> bool:
         """Is a type valid as a *args argument?"""

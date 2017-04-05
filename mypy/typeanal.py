@@ -427,7 +427,8 @@ class TypeAnalyser(TypeVisitor[Type]):
         return Instance(node.node, args or [])
 
     def tuple_type(self, items: List[Type]) -> TupleType:
-        return TupleType(items, fallback=self.builtin_type('builtins.tuple', [AnyType()]))
+        return TupleType(items,
+                         fallback=self.builtin_type('builtins.tuple', [AnyType()]*len(items)))
 
 
 class TypeAnalyserPass3(TypeVisitor[None]):
