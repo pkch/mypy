@@ -18,3 +18,8 @@ install:
 script:
   - python runtests.py -x lint
   - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then flake8; fi
+
+env:
+  - TESTGROUP=seq
+  - TESTGROUP=0
+  - TESTGROUP=1

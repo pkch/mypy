@@ -155,7 +155,13 @@ class Driver:
                 self.queue = [task for task in self.queue
                               if logs[-1]['exit_code'].get(task.name, 0)]
 
-        for task in self.queue:
+        for n, task in enumerate(self.queue):
+            if 'CI' in os.environ:
+                if os.environ['TESTGROUP'] == 'seq':
+                    if not task.sequential:
+                        continue
+                elif int(os.environ['TESTGROUP']) != n % 2:
+                    continue
             self.waiter.add(task.cmd, sequential=task.sequential)
         return self.waiter.run()
 
