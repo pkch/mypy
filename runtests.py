@@ -43,7 +43,7 @@ import json
 class Driver:
 
     def __init__(self, *, whitelist: List[str], blacklist: List[str],
-            lf: bool, ff: bool,
+            lf: bool, ff: bool, multi_vm: bool,
             arglist: List[str], pyt_arglist: List[str],
             verbosity: int, parallel_limit: int,
             xfail: List[str], coverage: bool) -> None:
@@ -58,6 +58,7 @@ class Driver:
         self.mypy = os.path.join(self.cwd, 'scripts', 'mypy')
         self.env = dict(os.environ)
         self.coverage = coverage
+        self.multi_vm = multi_vm
 
     def prepend_path(self, name: str, paths: List[str]) -> None:
         old_val = self.env.get(name)
@@ -86,7 +87,7 @@ class Driver:
             return
         args = [sys.executable, self.mypy] + mypy_args
         args.append('--show-traceback')
-        self.waiter.add(LazySubprocess(full_name, args, cwd=cwd, env=self.env))
+        self.add(full_name, args, cwd=cwd)
 
     def add_mypy(self, name: str, *args: str, cwd: Optional[str] = None) -> None:
         self.add_mypy_cmd(name, list(args), cwd=cwd)
@@ -102,6 +103,9 @@ class Driver:
     def add_mypy_string(self, name: str, *args: str, cwd: Optional[str] = None) -> None:
         self.add_mypy_cmd(name, ['-c'] + list(args), cwd=cwd)
 
+    def add(self, name, args, *, cwd=None, sequential=False):
+        self.waiter.add(LazySubprocess(name, args, cwd=cwd, env=self.env), sequential=sequential)
+
     def add_pytest(self, name: str, pytest_args: List[str], coverage: bool = False) -> None:
         full_name = 'pytest %s' % name
         if not self.allow(full_name):
@@ -110,8 +114,7 @@ class Driver:
             args = [sys.executable, '-m', 'pytest', '--cov=mypy'] + pytest_args
         else:
             args = [sys.executable, '-m', 'pytest'] + pytest_args
-
-        self.waiter.add(LazySubprocess(full_name, args, env=self.env), sequential=True)
+        self.add(full_name, args, sequential=True)
 
     def add_python(self, name: str, *args: str, cwd: Optional[str] = None) -> None:
         name = 'run %s' % name
@@ -119,8 +122,7 @@ class Driver:
             return
         largs = list(args)
         largs[0:0] = [sys.executable]
-        env = self.env
-        self.waiter.add(LazySubprocess(name, largs, cwd=cwd, env=env))
+        self.add(name, largs, cwd=cwd)
 
     def add_python_mod(self, name: str, *args: str, cwd: Optional[str] = None,
                        coverage: bool = False) -> None:
@@ -132,8 +134,7 @@ class Driver:
             largs[0:0] = ['coverage', 'run', '-m']
         else:
             largs[0:0] = [sys.executable, '-m']
-        env = self.env
-        self.waiter.add(LazySubprocess(name, largs, cwd=cwd, env=env))
+        self.add(name, largs, cwd=cwd)
 
     def add_python_string(self, name: str, *args: str, cwd: Optional[str] = None) -> None:
         name = 'run %s' % name
@@ -141,8 +142,7 @@ class Driver:
             return
         largs = list(args)
         largs[0:0] = [sys.executable, '-c']
-        env = self.env
-        self.waiter.add(LazySubprocess(name, largs, cwd=cwd, env=env))
+        self.add(name, largs, cwd=cwd)
 
     def add_python2(self, name: str, *args: str, cwd: Optional[str] = None) -> None:
         name = 'run2 %s' % name
@@ -152,16 +152,14 @@ class Driver:
         python2 = util.try_find_python2_interpreter()
         assert python2, "Couldn't find a Python 2.7 interpreter"
         largs[0:0] = [python2]
-        env = self.env
-        self.waiter.add(LazySubprocess(name, largs, cwd=cwd, env=env))
+        self.add(name, largs, cwd=cwd)
 
     def add_flake8(self, cwd: Optional[str] = None) -> None:
         name = 'lint'
         if not self.allow(name):
             return
         largs = ['flake8', '-j0']
-        env = self.env
-        self.waiter.add(LazySubprocess(name, largs, cwd=cwd, env=env))
+        self.add(name, largs, cwd=cwd)
 
     def list_tasks(self) -> None:
         for id, task in enumerate(self.waiter.queue):
@@ -331,6 +329,7 @@ def usage(status: int) -> None:
     print('  FILTER                 include tasks matching FILTER')
     print('  -x, --exclude FILTER   exclude tasks matching FILTER')
     print('  -c, --coverage         calculate code coverage while running tests')
+    print('  -m, --multi_vm         run tests on multiple VMs (for CI environment)')
     print('  --                     treat all remaining arguments as positional')
     sys.exit(status)
 
@@ -365,6 +364,7 @@ def main() -> None:
     ff = False
     list_only = False
     coverage = False
+    multi_vm = False
 
     allow_opts = True
     curlist = whitelist
@@ -399,6 +399,8 @@ def main() -> None:
                 list_only = True
             elif a == '-c' or a == '--coverage':
                 coverage = True
+            elif a == '-m' or a == '--multi_vm':
+                multi_vm = True
             elif a == '-h' or a == '--help':
                 usage(0)
             else:
@@ -422,7 +424,7 @@ def main() -> None:
     if ff:
         pyt_arglist.append('--ff')
 
-    driver = Driver(whitelist=whitelist, blacklist=blacklist, lf=lf, ff=ff,
+    driver = Driver(whitelist=whitelist, blacklist=blacklist, lf=lf, ff=ff, multi_vm=multi_vm,
                     arglist=arglist, pyt_arglist=pyt_arglist, verbosity=verbosity,
                     parallel_limit=parallel_limit, xfail=[], coverage=coverage)
 
