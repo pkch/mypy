@@ -21,6 +21,42 @@ class WaiterError(Exception):
     pass
 
 
+LogType = Dict[str, Dict[str, float]]
+
+
+# TODO: add warning if CI version has fewer tests, or much different timings, from live version
+class LogFile:
+    LOGSIZE = 50
+    FULL_LOG_FILENAME = '.citest_log.json' if 'CI' in os.environ else '.runtest_log.json'
+
+    @classmethod
+    def load(cls) -> List[LogType]:
+        try:
+            # get the last log
+            with open(cls.FULL_LOG_FILENAME) as fp:
+                test_log = json.load(fp)
+        except FileNotFoundError:
+            test_log = []
+        except json.JSONDecodeError:
+            print('corrupt test log file {}'.format(cls.FULL_LOG_FILENAME), file=sys.stderr)
+            test_log = []
+        return test_log
+
+    @classmethod
+    def save(cls, new_log: LogType) -> None:
+        if 'CI' in os.environ:  # no point saving anything in CI environment
+            return
+        if not new_log:  # don't append empty log, it will corrupt the cache file
+            return
+        # log only LOGSIZE most recent tests
+        test_log = (LogFile.load() + [new_log])[:LogFile.LOGSIZE]
+        try:
+            with open(LogFile.FULL_LOG_FILENAME, 'w') as fp:
+                json.dump(test_log, fp, sort_keys=True, indent=4)
+        except Exception as e:
+            print('cannot save test log file:', e)
+
+
 class LazySubprocess:
     """Wrapper around a subprocess that runs a test task."""
 
@@ -110,11 +146,7 @@ class Waiter:
     if not waiter.run():
         print('error')
     """
-    LOGSIZE = 50
-    FULL_LOG_FILENAME = '.runtest_log.json'
-
-    def __init__(self, limit: int = 0, *, verbosity: int = 0, xfail: List[str] = [],
-                 lf: bool = False, ff: bool = False) -> None:
+    def __init__(self, limit: int = 0, *, verbosity: int = 0, xfail: List[str] = []) -> None:
         self.verbosity = verbosity
         self.queue = []  # type: List[LazySubprocess]
         # Index of next task to run in the queue.
@@ -131,27 +163,13 @@ class Waiter:
                 # major mistake to count *all* CPUs on the machine.
                 limit = len(sched_getaffinity(0))
         self.limit = limit
-        self.lf = lf
-        self.ff = ff
         assert limit > 0
         self.xfail = set(xfail)
         self._note = None  # type: Noter
         self.times1 = {}  # type: Dict[str, float]
         self.times2 = {}  # type: Dict[str, float]
-        self.new_log = defaultdict(dict)  # type: Dict[str, Dict[str, float]]
+        self.new_log = defaultdict(dict)  # type: LogType
         self.sequential_tasks = set()  # type: Set[str]
-
-    def load_log_file(self) -> Optional[List[Dict[str, Dict[str, Any]]]]:
-        try:
-            # get the last log
-            with open(self.FULL_LOG_FILENAME) as fp:
-                test_log = json.load(fp)
-        except FileNotFoundError:
-            test_log = []
-        except json.JSONDecodeError:
-            print('corrupt test log file {}'.format(self.FULL_LOG_FILENAME), file=sys.stderr)
-            test_log = []
-        return test_log
 
     def add(self, cmd: LazySubprocess, sequential: bool = False) -> int:
         rv = len(self.queue)
@@ -269,47 +287,6 @@ class Waiter:
         if self.verbosity == 0:
             self._note = Noter(len(self.queue))
         print('SUMMARY  %d tasks selected' % len(self.queue))
-
-        def avg(lst: Iterable[float]) -> float:
-            valid_items = [item for item in lst if item is not None]
-            if not valid_items:
-                # we don't know how long a new task takes
-                # better err by putting it in front in case it is slow:
-                # a fast task in front hurts performance less than a slow task in the back
-                return float('inf')
-            else:
-                return sum(valid_items) / len(valid_items)
-
-        logs = self.load_log_file()
-        if logs:
-            times = {cmd.name: avg(log['runtime'].get(cmd.name, None) for log in logs)
-                     for cmd in self.queue}
-
-            def sort_function(cmd: LazySubprocess) -> Tuple[Any, int, float]:
-                # longest tasks first
-                runtime = -times[cmd.name]
-                # sequential tasks go first by default
-                sequential = -(cmd.name in self.sequential_tasks)
-                if self.ff:
-                    # failed tasks first with -ff
-                    exit_code = -logs[-1]['exit_code'].get(cmd.name, 0)
-                    if not exit_code:
-                        # avoid interrupting parallel tasks with sequential in between
-                        # so either: seq failed, parallel failed, parallel passed, seq passed
-                        # or: parallel failed, seq failed, seq passed, parallel passed
-                        # I picked the first one arbitrarily, since no obvious pros/cons
-                        # in other words, among failed tasks, sequential should go before parallel,
-                        # and among successful tasks, sequential should go after parallel
-                        sequential = -sequential
-                else:
-                    # ignore exit code without -ff
-                    exit_code = 0
-                return exit_code, sequential, runtime
-            self.queue = sorted(self.queue, key=sort_function)
-            if self.lf:
-                self.queue = [cmd for cmd in self.queue
-                              if logs[-1]['exit_code'].get(cmd.name, 0)]
-
         sys.stdout.flush()
         # Failed tasks.
         all_failures = []  # type: List[str]
@@ -337,14 +314,7 @@ class Waiter:
         if self.verbosity == 0:
             self._note.clear()
 
-        if self.new_log:  # don't append empty log, it will corrupt the cache file
-            # log only LOGSIZE most recent tests
-            test_log = (self.load_log_file() + [self.new_log])[:self.LOGSIZE]
-            try:
-                with open(self.FULL_LOG_FILENAME, 'w') as fp:
-                    json.dump(test_log, fp, sort_keys=True, indent=4)
-            except Exception as e:
-                print('cannot save test log file:', e)
+        LogFile.save(self.new_log)
 
         if all_failures:
             summary = 'SUMMARY  %d/%d tasks and %d/%d tests failed' % (

@@ -24,9 +24,9 @@ if True:
     # Now `typing` is available.
 
 
-from typing import Dict, List, Optional, Set, Iterable
+from typing import Dict, List, Optional, Set, Iterable, NamedTuple, Tuple
 
-from mypy.waiter import Waiter, LazySubprocess
+from mypy.waiter import Waiter, LazySubprocess, LogFile
 from mypy import util
 from mypy.test.config import test_data_prefix
 from mypy.test.testpythoneval import python_eval_files, python_34_eval_files
@@ -37,8 +37,11 @@ import re
 import json
 
 
+Task = NamedTuple('Task', [('name', str), ('cmd', LazySubprocess), ('sequential', bool)])
+
 # Ideally, all tests would be `discover`able so that they can be driven
 # (and parallelized) by an external test driver.
+
 
 class Driver:
 
@@ -52,13 +55,16 @@ class Driver:
         self.arglist = arglist
         self.pyt_arglist = pyt_arglist
         self.verbosity = verbosity
-        self.waiter = Waiter(verbosity=verbosity, limit=parallel_limit, xfail=xfail, lf=lf, ff=ff)
+        self.waiter = Waiter(verbosity=verbosity, limit=parallel_limit, xfail=xfail)
         self.versions = get_versions()
         self.cwd = os.getcwd()
         self.mypy = os.path.join(self.cwd, 'scripts', 'mypy')
         self.env = dict(os.environ)
         self.coverage = coverage
         self.multi_vm = multi_vm
+        self.queue = []  # type: List[Task]
+        self.lf = lf
+        self.ff = ff
 
     def prepend_path(self, name: str, paths: List[str]) -> None:
         old_val = self.env.get(name)
@@ -104,7 +110,54 @@ class Driver:
         self.add_mypy_cmd(name, ['-c'] + list(args), cwd=cwd)
 
     def add(self, name, args, *, cwd=None, sequential=False):
-        self.waiter.add(LazySubprocess(name, args, cwd=cwd, env=self.env), sequential=sequential)
+        task = Task(name=name, cmd=LazySubprocess(name, args, cwd=cwd, env=self.env),
+                    sequential=sequential)
+        self.queue.append(task)
+
+    def run(self) -> int:
+        def avg(lst: Iterable[float]) -> float:
+            valid_items = [item for item in lst if item is not None]
+            if not valid_items:
+                # we don't know how long a new task takes
+                # better err by putting it in front in case it is slow:
+                # a fast task in front hurts performance less than a slow task in the back
+                return float('inf')
+            else:
+                return sum(valid_items) / len(valid_items)
+
+        logs = LogFile.load()
+        if logs:
+            times = {task.name: avg(log['runtime'].get(task.name, None) for log in logs)
+                     for task in self.queue}
+
+            def sort_function(task: Task) -> Tuple[float, int, float]:
+                # longest tasks first
+                runtime = -times[task.name]
+                # sequential tasks go first by default
+                sequential = -task.sequential
+                if self.ff:
+                    # failed tasks first with -ff
+                    exit_code = -logs[-1]['exit_code'].get(task.name, 0)
+                    if not exit_code:
+                        # avoid interrupting parallel tasks with sequential in between
+                        # so either: seq failed, parallel failed, parallel passed, seq passed
+                        # or: parallel failed, seq failed, seq passed, parallel passed
+                        # I picked the first one arbitrarily, since no obvious pros/cons
+                        # in other words, among failed tasks, sequential should go before parallel,
+                        # and among successful tasks, sequential should go after parallel
+                        sequential = -sequential
+                else:
+                    # ignore exit code without -ff
+                    exit_code = 0
+                return exit_code, sequential, runtime
+            self.queue = sorted(self.queue, key=sort_function)
+            if self.lf:
+                self.queue = [task for task in self.queue
+                              if logs[-1]['exit_code'].get(task.name, 0)]
+
+        for task in self.queue:
+            self.waiter.add(task.cmd, sequential=task.sequential)
+        return self.waiter.run()
 
     def add_pytest(self, name: str, pytest_args: List[str], coverage: bool = False) -> None:
         full_name = 'pytest %s' % name
@@ -449,7 +502,7 @@ def main() -> None:
         driver.list_tasks()
         return
 
-    exit_code = driver.waiter.run()
+    exit_code = driver.run()
     t1 = time.perf_counter()
     print('total runtime:', t1 - t0, 'sec')
 
