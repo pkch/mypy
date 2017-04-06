@@ -521,8 +521,8 @@ class TypeAnalyserPass3(TypeVisitor[None]):
             item.accept(self)
         fallback_item = join.join_type_list(t.items)
         # if it's not builtins.tuple, then its bases should have tuple[Any]
-        # however, assert would be too expensive
-        if t.fallback.type.fullname() == 'builtins.tuple':
+        # TODO: put assert here, even behind a comment
+        if type(t.fallback) == Instance and t.fallback.type.fullname() == 'builtins.tuple':
             t.fallback.args = [fallback_item]
 
     def visit_typeddict_type(self, t: TypedDictType) -> None:

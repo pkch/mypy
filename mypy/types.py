@@ -15,6 +15,7 @@ from mypy.nodes import (
 )
 
 from mypy.sharedparse import argument_elide_name
+import mypy
 
 
 T = TypeVar('T')
@@ -378,9 +379,7 @@ class Instance(Type):
     def __init__(self, typ: Optional[mypy.nodes.TypeInfo], args: List[Type],
                  line: int = -1, column: int = -1, erased: bool = False) -> None:
         assert(typ is None or typ.fullname() not in ["builtins.Any", "typing.Any"])
-        #if not (typ.fullname() != 'builtins.tuple' or len(args)==1):
-            #print(1)
-        #assert(typ.fullname() != 'builtins.tuple' or len(args)==1)
+        assert(typ is None or typ.fullname() != 'builtins.tuple' or len(args)==1)
         self.type = typ
         self.args = args
         self.erased = erased
@@ -1711,7 +1710,8 @@ def set_typ_args(tp: Type, new_args: List[Type], line: int = -1, column: int = -
     if isinstance(tp, Instance):
         return Instance(tp.type, new_args, line, column)
     if isinstance(tp, TupleType):
-        return tp.copy_modified(items=new_args)
+        fallback = tp.fallback.copy_modified(args=mypy.join.join_type_list(new_args))
+        return tp.copy_modified(items=new_args, fallback=fallback)
     if isinstance(tp, UnionType):
         return UnionType.make_simplified_union(new_args, line, column)
     if isinstance(tp, CallableType):
