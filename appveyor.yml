@@ -39,7 +39,8 @@ artifacts:
   - path: dist\*
 
 cache:
-  - c:\python36\lib\site-packages -> appveyor.yml
-  - c:\python36-x64\lib\site-packages -> appveyor.yml
-  - C:\Python35\lib\site-packages -> appveyor.yml
-  - C:\Python35-x64\lib\site-packages -> appveyor.yml
+  - c:\python36\lib\site-packages
+  - c:\python36-x64\lib\site-packages
+  - C:\Python35\lib\site-packages
+  - C:\Python35-x64\lib\site-packages
+  - C:\projects\mypy

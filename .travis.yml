@@ -1,6 +1,11 @@
 sudo: false
 language: python
-cache: pip
+cache:
+  - pip
+  - directories:
+    - /home/travis/virtualenv/
+    - /home/travis/build/
+
 python:
   - "3.3"
   - "3.4"
@@ -19,4 +24,3 @@ install:
 script:
   - python runtests.py -x lint
   - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then flake8; fi
-
