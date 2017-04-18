@@ -27,7 +27,7 @@ build: off
 
 test_script:
     # Ignore lint (it's run separately below)
-    - "%PYTHON%\\python.exe runtests.py -x lint -j8"
+    - "%PYTHON%\\python.exe runtests.py -x lint -j16"
     - ps: if ($env:PYTHON_VERSION -Match "3.6.x" -And $env:PYTHON_ARCH -Match "64") { iex "$env:PYTHON\\python.exe -m flake8" }
 
 after_test:
