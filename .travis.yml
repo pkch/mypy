@@ -20,3 +20,4 @@ install:
 script:
   - python runtests.py -x lint
   - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then flake8; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == '3.6' ]] && [[ "$(git diff --name-only $TRAVIS_COMMIT_RANGE | grep -v -e 'docs/' -e 'md$' -e 'rst$')" != "" ]]; then pip install -q -r requirements-docs.txt; SPHINX_OPTS="-nW" make html; fi
