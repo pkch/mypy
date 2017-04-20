@@ -111,7 +111,10 @@ class Waiter:
         print('error')
     """
     LOGSIZE = 50
+    TRAVIS = 'TRAVIS' in os.environ
     FULL_LOG_FILENAME = '.runtest_log.json'
+    if TRAVIS:
+        FULL_LOG_FILENAME = os.path.join(os.environ['HOME'], '.cache', 'pip', FULL_LOG_FILENAME)
 
     def __init__(self, limit: int = 0, *, verbosity: int = 0, xfail: List[str] = [],
                  lf: bool = False, ff: bool = False) -> None:
@@ -147,6 +150,7 @@ class Waiter:
             with open(self.FULL_LOG_FILENAME) as fp:
                 test_log = json.load(fp)
         except FileNotFoundError:
+            print('cannot find test timing cache')
             test_log = []
         except json.JSONDecodeError:
             print('corrupt test log file {}'.format(self.FULL_LOG_FILENAME), file=sys.stderr)
@@ -338,13 +342,17 @@ class Waiter:
             self._note.clear()
 
         if self.new_log:  # don't append empty log, it will corrupt the cache file
+            if all_failures:
+                # do not keep runtime information from failed runs, it may be misleading
+                self.new_log['runtime'] = {}
             # log only LOGSIZE most recent tests
             test_log = (self.load_log_file() + [self.new_log])[:self.LOGSIZE]
             try:
                 with open(self.FULL_LOG_FILENAME, 'w') as fp:
                     json.dump(test_log, fp, sort_keys=True, indent=4)
+                print('saved test timing cache to', self.FULL_LOG_FILENAME)
             except Exception as e:
-                print('cannot save test log file:', e)
+                print('cannot save test timing cache:', e)
 
         if all_failures:
             summary = 'SUMMARY  %d/%d tasks and %d/%d tests failed' % (
