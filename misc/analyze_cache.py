@@ -36,12 +36,18 @@ def extract_classes(chunks: Iterable[CacheData]) -> Iterable[JsonDict]:
     yield from extract([chunk.data for chunk in chunks])
 
 
-def load_json(data_path: str, meta_path: str) -> CacheData:
+def load_json(data_path: str, meta_path: str) -> Optional[CacheData]:
     with open(data_path, 'r') as ds:
-        data_json = json.load(ds)
+        try:
+            data_json = json.load(ds)
+        except json.JSONDecodeError:
+            return None
 
     with open(meta_path, 'r') as ms:
-        meta_json = json.load(ms)
+        try:
+            meta_json = json.load(ms)
+        except json.JSONDecodeError:
+            return None
 
     data_size = os.path.getsize(data_path)
     meta_size = os.path.getsize(meta_path)
@@ -55,9 +61,11 @@ def get_files(root: str) -> Iterable[CacheData]:
         for filename in filenames:
             if filename.endswith(".data.json"):
                 meta_filename = filename.replace(".data.json", ".meta.json")
-                yield load_json(
+                cache_data = load_json(
                         os.path.join(dirpath, filename),
                         os.path.join(dirpath, meta_filename))
+                if cache_data:
+                    yield cache_data
 
 
 def pluck(name: str, chunks: Iterable[JsonDict]) -> Iterable[JsonDict]:

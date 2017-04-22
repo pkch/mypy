@@ -756,7 +756,11 @@ def find_cache_meta(id: str, path: str, manager: BuildManager) -> Optional[Cache
     with open(meta_json, 'r') as f:
         meta_str = f.read()
         manager.trace('Meta {} {}'.format(id, meta_str.rstrip()))
-        meta = json.loads(meta_str)  # TODO: Errors
+        try:
+            meta = json.loads(meta_str)
+        except json.JSONDecodeError:
+            manager.trace('Could not load cache for {}: meta cache is corrupt'.format(id))
+            return None
     if not isinstance(meta, dict):
         manager.trace('Could not load cache for {}: meta cache is not a dict'.format(id))
         return None

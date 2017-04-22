@@ -88,9 +88,13 @@ def readlinkabs(link: str) -> str:
 
 def type_check_only(sources: List[BuildSource], bin_dir: str, options: Options) -> BuildResult:
     # Type-check the program and dependencies and translate to Python.
-    return build.build(sources=sources,
-                       bin_dir=bin_dir,
-                       options=options)
+    import json
+    try:
+        return build.build(sources=sources,
+                           bin_dir=bin_dir,
+                           options=options)
+    except json.JSONDecodeError:
+        print('corrupt cache')
 
 
 FOOTER = """environment variables:
