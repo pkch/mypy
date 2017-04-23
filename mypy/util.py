@@ -155,9 +155,9 @@ atexit.register(cleanup)
 
 def replace(src: str, dst: str, temp_dir: str = None) -> None:
     '''
-    Atomically replaces file dst with file src
+    Atomically replaces dst with src
     Same semantics as os.replace but avoids delete file access error on Windows
-    temp_dir should exist and should not contain any valuable data; explicily providing
+    temp_dir should exist and should not contain valuable data; explicily providing
     it reduces temp file pollution in case of abnormal program termination
     '''
     if not mswindows:
@@ -174,18 +174,11 @@ def replace(src: str, dst: str, temp_dir: str = None) -> None:
         temp_dir = os.path.join(temp_dir, 'temp_files_ok_to_delete')
     dirs_to_delete.append(temp_dir)
 
-    # we need the deprecated tempfile.mktemp because it does precisely what we need:
-    # produce a randomized non-existent filename (without creating a file)
-    # we will try twice in case a file with that name is created before we call os.rename
-    # the probability of a temp name collision is ~(1/37^8)^2 ~ 1e-12
-    # even with 100 new temp files created between tempfile.mktemp and os.rename calls,
-    # the probability of a collision is 1e-10. we try twice, so 1e-20
-    for i in range(2):
-        tmp_filename = tempfile.mktemp(dir=temp_dir)
-        try:
-            os.rename(dst, tmp_filename)
-        except OSError:
-            pass
-        else:
-            break
+    # using deprecated tempfile.mktemp because mkstemp that replaced it can
+    # only create a file with a temp name, not rename a file into a temp name
+
+    tmp_filename = tempfile.mktemp(dir=temp_dir)
+    # race condition: a file with the same name may be created before we call os.rename
+    # however, this is probabilistically impossible, so we just let the program crash then
+    os.rename(dst, tmp_filename)
     os.rename(src, dst)
