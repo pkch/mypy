@@ -2,9 +2,15 @@
 
 import re
 import subprocess
+import sys
+import os
+import shutil
+import tempfile
+import atexit
 from xml.sax.saxutils import escape
 from typing import TypeVar, List, Tuple, Optional, Sequence, Dict
 
+mswindows = (sys.platform == "win32")
 
 T = TypeVar('T')
 
@@ -134,3 +140,52 @@ class IdMapper:
             self.id_map[o] = self.next_id
             self.next_id += 1
         return self.id_map[o]
+
+
+dirs_to_delete = []  # type: List[str]
+
+
+def cleanup() -> None:
+    for path in dirs_to_delete:
+        shutil.rmtree(path, ignore_errors=True)
+
+
+atexit.register(cleanup)
+
+
+def replace(src: str, dst: str, temp_dir: str = None) -> None:
+    '''
+    Atomically replaces file dst with file src
+    Same semantics as os.replace but avoids delete file access error on Windows
+    temp_dir should exist and should not contain any valuable data; explicily providing
+    it reduces temp file pollution in case of abnormal program termination
+    '''
+    if not mswindows:
+        os.replace(src, dst)
+        return
+
+    if temp_dir is None:
+        # we don't own temp_dir, we need a random subfolder so we can delete it later
+        temp_dir = tempfile.mkdtemp()
+    else:
+        # we own temp_dir, we can use fixed subfolder name to reduce pollution risk
+        # using subfolder provides a slight additional protection in case
+        # user accidentally provides temp_dir that contains useful files
+        temp_dir = os.path.join(temp_dir, 'temp_files_ok_to_delete')
+    dirs_to_delete.append(temp_dir)
+
+    # we need the deprecated tempfile.mktemp because it does precisely what we need:
+    # produce a randomized non-existent filename (without creating a file)
+    # we will try twice in case a file with that name is created before we call os.rename
+    # the probability of a temp name collision is ~(1/37^8)^2 ~ 1e-12
+    # even with 100 new temp files created between tempfile.mktemp and os.rename calls,
+    # the probability of a collision is 1e-10. we try twice, so 1e-20
+    for i in range(2):
+        tmp_filename = tempfile.mktemp(dir=temp_dir)
+        try:
+            os.rename(dst, tmp_filename)
+        except OSError:
+            pass
+        else:
+            break
+    os.rename(src, dst)
